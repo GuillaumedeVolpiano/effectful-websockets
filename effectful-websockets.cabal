@@ -1,0 +1,74 @@
+cabal-version:   3.12
+name:            effectful-websockets
+version:         0.1.0.0
+synopsis:        WebSocket connections as an Effectful effect
+description:
+  A WebSocket effect for Effectful: send and receive whole text or binary
+  messages, as single actions or as a Streamly stream. The client
+  interpreter runs over the websockets package, keeps the action in the
+  calling thread, and watches the connection with pings.
+
+homepage:        https://github.com/GuillaumedeVolpiano/effectful-websockets
+license:         BSD-3-Clause
+license-file:    LICENSE
+author:          GuillaumedeVolpiano
+maintainer:      xavier@wheredoibegin.fr
+category:        Network, Web, Control
+build-type:      Simple
+tested-with:     GHC ==9.12.4
+extra-doc-files:
+  CHANGELOG.md
+  README.md
+
+source-repository head
+  type:     git
+  location: https://github.com/GuillaumedeVolpiano/effectful-websockets.git
+
+common shared
+  default-language: GHC2024
+  default-extensions:
+    NoFieldSelectors
+    OverloadedRecordDot
+    OverloadedStrings
+    TypeFamilies
+
+  ghc-options:
+    -Wall -Wcompat -Wredundant-constraints -Wmissing-deriving-strategies
+    -Wunused-packages
+
+library
+  import:          shared
+  hs-source-dirs:  src
+  exposed-modules:
+    Effectful.WebSocket
+    Effectful.WebSocket.Client
+
+  build-depends:
+    , async          ^>=2.2
+    , base           ^>=4.21
+    , bytestring     ^>=0.12
+    , effectful-core ^>=2.7.1
+    , streamly-core  ^>=0.3.3
+    , text           ^>=2.1
+    , websockets     ^>=0.13
+
+test-suite effectful-websockets-test
+  import:         shared
+  type:           exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is:        Main.hs
+  ghc-options:    -threaded
+  build-depends:
+    , async                ^>=2.2
+    , base                 ^>=4.21
+    , bytestring           ^>=0.12
+    , effectful            ^>=2.7
+    , effectful-core       ^>=2.7.1
+    , effectful-websockets
+    , network              ^>=3.2
+    , stm                  ^>=2.5
+    , streamly-core        ^>=0.3.3
+    , tasty                ^>=1.5
+    , tasty-hunit          ^>=0.10
+    , text                 ^>=2.1
+    , websockets           ^>=0.13
