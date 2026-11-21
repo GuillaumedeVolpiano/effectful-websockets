@@ -1,6 +1,6 @@
 cabal-version:   3.12
 name:            effectful-websockets
-version:         0.1.1.0
+version:         0.1.1.1
 synopsis:        WebSocket connections as an Effectful effect
 description:
   A WebSocket effect for Effectful: send and receive whole text or binary
@@ -50,8 +50,8 @@ library
     , effectful-core       ^>=2.7.1
     , stm                  ^>=2.5
     , streamly-core        ^>=0.3.3
-    , streamly-http        ^>=0.2
-    , streamly-websockets  ^>=0.2
+    , streamly-http        ^>=0.3
+    , streamly-websockets  ^>=0.3
     , text                 ^>=2.1
 
 test-suite effectful-websockets-test
@@ -70,7 +70,7 @@ test-suite effectful-websockets-test
     , network              ^>=3.2
     , stm                  ^>=2.5
     , streamly-core        ^>=0.3.3
-    , streamly-websockets  ^>=0.2
+    , streamly-websockets  ^>=0.3
     , tasty                ^>=1.5
     , tasty-hunit          ^>=0.10
     , text                 ^>=2.1

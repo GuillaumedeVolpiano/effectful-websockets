@@ -1,5 +1,9 @@
 # Revision history for effectful-websockets
 
+## 0.1.1.1 -- 2026-11-21
+
+* Built on streamly-http 0.3 and streamly-websockets 0.3.
+
 ## 0.1.1.0 -- 2026-11-21
 
 * `runWebSocketOver` and `connectionConfig`, for interpreters that open
