@@ -10,7 +10,8 @@ effect.
   tests; `traced` reports every message to an observer, whatever the
   interpreter.
 - `Effectful.WebSocket.Client`: `runWebSocketClient` opens a connection
-  with the [websockets](https://hackage.haskell.org/package/websockets)
+  with the
+  [streamly-websockets](https://github.com/GuillaumedeVolpiano/streamly-websockets)
   package and runs an action over it.
 
 ```haskell
@@ -26,8 +27,7 @@ hello = runWebSocketClient (clientConfig "127.0.0.1" 8080 "/") $ do
 ## Behaviour
 
 - The action runs in the calling thread, so effects with thread-local
-  state keep its changes. (`websockets` runs the action given to its ping
-  helper in another thread.)
+  state keep its changes. The pings are sent by a watchdog thread.
 - The server is pinged every ten seconds by default, with twenty seconds to
   answer; `NoPong` reports a silent server. Pongs are only seen while the
   action receives messages.
@@ -40,7 +40,15 @@ hello = runWebSocketClient (clientConfig "127.0.0.1" 8080 "/") $ do
   so that the server reads all that was sent.
 - Plain TCP only: no TLS (`wss://`).
 
-Tested with GHC 9.12.4, effectful 2.7.1, websockets 0.13.
+A server that breaks the protocol, or sends a message larger than
+`maxMessageSize`, ends the connection like a server that closes it.
+
+streamly-websockets and streamly-http are not on Hackage yet:
+`cabal.project` picks them up when they are checked out next to this
+repository.
+
+Tested with GHC 9.12.4 and effectful 2.7.1, against servers of the
+websockets package 0.13.
 
 ## License
 

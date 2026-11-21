@@ -5,8 +5,8 @@ synopsis:        WebSocket connections as an Effectful effect
 description:
   A WebSocket effect for Effectful: send and receive whole text or binary
   messages, as single actions or as a Streamly stream. The client
-  interpreter runs over the websockets package, keeps the action in the
-  calling thread, and watches the connection with pings.
+  interpreter runs over the streamly-websockets package, keeps the action
+  in the calling thread, and watches the connection with pings.
 
 homepage:        https://github.com/GuillaumedeVolpiano/effectful-websockets
 license:         BSD-3-Clause
@@ -44,13 +44,15 @@ library
     Effectful.WebSocket.Client
 
   build-depends:
-    , async          ^>=2.2
-    , base           ^>=4.21
-    , bytestring     ^>=0.12
-    , effectful-core ^>=2.7.1
-    , streamly-core  ^>=0.3.3
-    , text           ^>=2.1
-    , websockets     ^>=0.13
+    , async                ^>=2.2
+    , base                 ^>=4.21
+    , bytestring           ^>=0.12
+    , effectful-core       ^>=2.7.1
+    , stm                  ^>=2.5
+    , streamly-core        ^>=0.3.3
+    , streamly-http        ^>=0.1
+    , streamly-websockets  ^>=0.1
+    , text                 ^>=2.1
 
 test-suite effectful-websockets-test
   import:         shared

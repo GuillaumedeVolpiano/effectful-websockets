@@ -1,0 +1,6 @@
+packages: .
+
+-- The libraries this one is built on, when they are checked out next to it.
+optional-packages:
+  ../streamly-http
+  ../streamly-websockets
