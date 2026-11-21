@@ -1,6 +1,6 @@
 cabal-version:   3.12
 name:            effectful-websockets
-version:         0.1.0.1
+version:         0.1.1.0
 synopsis:        WebSocket connections as an Effectful effect
 description:
   A WebSocket effect for Effectful: send and receive whole text or binary

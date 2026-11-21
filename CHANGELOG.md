@@ -1,7 +1,9 @@
 # Revision history for effectful-websockets
 
-## 0.1.0.1 -- unreleased
+## 0.1.1.0 -- unreleased
 
+* `runWebSocketOver` and `connectionConfig`, for interpreters that open
+  the connection another way: effectful-websockets-tls does, over TLS.
 * Built on streamly-websockets 0.2: a connection that does not open
   within thirty seconds fails with `ConnectFailed`.
 * The tests run against the server of streamly-websockets; the websockets

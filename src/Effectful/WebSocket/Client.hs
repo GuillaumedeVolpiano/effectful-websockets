@@ -20,6 +20,10 @@ module Effectful.WebSocket.Client
 
     -- * Interpreter
   , runWebSocketClient
+
+    -- * Other ways to open the connection
+  , runWebSocketOver
+  , connectionConfig
   ) where
 
 import Control.Concurrent (threadDelay)
@@ -111,14 +115,40 @@ runWebSocketClient
   => ClientConfig
   -> Eff (WebSocket : es) a
   -> Eff es a
-runWebSocketClient config action = do
+runWebSocketClient config = runWebSocketOver (WS.withConnection (connectionConfig config)) config.pingPong
+
+-- | The configuration of @streamly-websockets@ that a 'ClientConfig'
+-- stands for, without its pings.
+connectionConfig :: ClientConfig -> WS.Config
+connectionConfig config =
+  (WS.config config.host config.port (Char8.pack config.path))
+    { WS.headers = config.headers
+    , WS.maxMessageSize = config.maxMessageSize
+    , WS.closeTimeout = config.closeTimeout
+    }
+
+-- | Like 'runWebSocketClient', with the way to open the connection left
+-- to a function, such as @withConnection@ of @streamly-websockets@ over
+-- another transport: @effectful-websockets-tls@ uses it for secure
+-- WebSockets. The pings are given apart.
+--
+-- What the function throws before it has a connection is reported as
+-- 'ConnectFailed' when it is an 'IOError', an error of
+-- @streamly-websockets@ or one of @streamly-http@; anything else passes.
+runWebSocketOver
+  :: (IOE :> es, Error WebSocketError :> es)
+  => (forall x. (WS.Connection -> IO x) -> IO x)
+  -> Maybe PingPong
+  -> Eff (WebSocket : es) a
+  -> Eff es a
+runWebSocketOver open pings action = do
   outcome <- withEffToIO SeqUnlift $ \runInIO -> do
     connected <- newIORef False
-    attempt <- try . WS.withConnection settings $ \connection -> do
+    attempt <- try . open $ \connection -> do
       writeIORef connected True
       closed <- newIORef False
       let run = runInIO (runWebSocketWith (liftIO . sendTo closed connection) (liftIO (receiveFrom closed connection)) action)
-      case config.pingPong of
+      case pings of
         Nothing -> run
         Just pingPong -> withAsync (watch pingPong connection) $ \watchdog -> link watchdog >> run
     wasConnected <- readIORef connected
@@ -132,12 +162,6 @@ runWebSocketClient config action = do
         | otherwise -> throwIO err
   either throwError pure outcome
   where
-    settings =
-      (WS.config config.host config.port (Char8.pack config.path))
-        { WS.headers = config.headers
-        , WS.maxMessageSize = config.maxMessageSize
-        , WS.closeTimeout = config.closeTimeout
-        }
     -- What opening a connection throws: the TCP connection, the request,
     -- the answer of the server.
     openingFailure err =

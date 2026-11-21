@@ -38,7 +38,9 @@ hello = runWebSocketClient (clientConfig "127.0.0.1" 8080 "/") $ do
 - When the action is done, the client closes the WebSocket and waits for the
   server to answer (one second by default) before the TCP connection goes,
   so that the server reads all that was sent.
-- Plain TCP only: no TLS (`wss://`).
+- Plain TCP only. Secure WebSockets (`wss://`) are in
+  [effectful-websockets-tls](https://github.com/GuillaumedeVolpiano/effectful-websockets-tls),
+  a package apart, so that this one does not need a TLS stack.
 
 A server that breaks the protocol, or sends a message larger than
 `maxMessageSize`, ends the connection like a server that closes it.
