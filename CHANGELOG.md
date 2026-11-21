@@ -1,6 +1,6 @@
 # Revision history for effectful-websockets
 
-## 0.1.1.0 -- unreleased
+## 0.1.1.0 -- 2026-11-21
 
 * `runWebSocketOver` and `connectionConfig`, for interpreters that open
   the connection another way: effectful-websockets-tls does, over TLS.
