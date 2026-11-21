@@ -26,6 +26,7 @@ module Effectful.WebSocket.Client
 import Control.Concurrent.Async (ExceptionInLinkedThread (..), link, withAsync)
 import Control.Concurrent.MVar (newEmptyMVar, putMVar, takeMVar)
 import Control.Exception (IOException, SomeException, catch, displayException, finally, fromException, throwIO, try)
+import Control.Monad (forever, void)
 import Data.ByteString (ByteString)
 import Data.ByteString.Lazy qualified as LazyByteString
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
@@ -38,6 +39,7 @@ import Effectful.Error.Static (Error, throwError)
 import Effectful.WebSocket (Message (..), WebSocket, runWebSocketWith)
 import Network.WebSockets qualified as WS
 import Network.WebSockets.Connection.PingPong (PongTimeout (..))
+import System.Timeout (timeout)
 
 -- | Where to connect, and how.
 data ClientConfig = ClientConfig
@@ -50,13 +52,24 @@ data ClientConfig = ClientConfig
   , options :: WS.ConnectionOptions
   , pingPong :: Maybe PingPong
   -- ^ 'Nothing' sends no ping.
+  , closeTimeout :: Int
+  -- ^ Microseconds to wait, once the action is done, for the server to
+  -- answer the closing of the connection.
   }
 
 -- | A configuration with no extra header, the default options of
--- @websockets@ and 'defaultPingPong'.
+-- @websockets@, 'defaultPingPong', and one second to close.
 clientConfig :: String -> Int -> String -> ClientConfig
 clientConfig host port path =
-  ClientConfig {host, port, path, headers = [], options = WS.defaultConnectionOptions, pingPong = Just defaultPingPong}
+  ClientConfig
+    { host
+    , port
+    , path
+    , headers = []
+    , options = WS.defaultConnectionOptions
+    , pingPong = Just defaultPingPong
+    , closeTimeout = 1_000_000
+    }
 
 -- | Keeping the connection alive, and noticing when the server is gone.
 data PingPong = PingPong
@@ -105,7 +118,7 @@ runWebSocketClient config action = do
           finished <- newEmptyMVar
           let watch = WS.withPingPong (pingPongOptions pingPong) connection (const (takeMVar finished))
           withAsync watch $ \watchdog -> link watchdog >> (run `finally` putMVar finished ())
-      WS.sendClose connection ("" :: ByteString) `catch` \(_ :: SomeException) -> pure ()
+      closeGracefully connection
       pure value
     wasConnected <- readIORef connected
     case attempt of
@@ -118,6 +131,15 @@ runWebSocketClient config action = do
         | otherwise -> throwIO err
   either throwError pure outcome
   where
+    -- Send the close frame, then wait for the server's before the TCP
+    -- connection goes: closing it at once can make the system reset it,
+    -- and the server lose what it had not read yet.
+    closeGracefully connection =
+      ( do
+          WS.sendClose connection ("" :: ByteString)
+          void (timeout config.closeTimeout (forever (WS.receiveDataMessage connection)))
+      )
+        `catch` \(_ :: SomeException) -> pure ()
     pingPongOptions pingPong = WS.defaultPingPongOptions {WS.pingInterval = pingPong.interval, WS.pongTimeout = pingPong.timeout}
 
 -- | Once the connection is known to be closed, nothing is sent: the
