@@ -7,3 +7,5 @@
   actions.
 * `Effectful.WebSocket.Client`: a client over `websockets`, with
   configurable pings, that keeps the action in the calling thread.
+* `traced`, to observe the messages of a connection.
+* The client waits for the server to answer the closing of the connection.

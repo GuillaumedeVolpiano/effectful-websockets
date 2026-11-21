@@ -7,7 +7,8 @@ effect.
   text or binary messages, one at a time or as a
   [Streamly](https://hackage.haskell.org/package/streamly-core) stream
   (`messages`). `runWebSocketWith` interprets it with two actions, for
-  tests.
+  tests; `traced` reports every message to an observer, whatever the
+  interpreter.
 - `Effectful.WebSocket.Client`: `runWebSocketClient` opens a connection
   with the [websockets](https://hackage.haskell.org/package/websockets)
   package and runs an action over it.
@@ -34,6 +35,9 @@ hello = runWebSocketClient (clientConfig "127.0.0.1" 8080 "/") $ do
   whole.
 - A connection closed by the server is not an error: receiving returns
   `Nothing`, and sending then returns `False`.
+- When the action is done, the client closes the WebSocket and waits for the
+  server to answer (one second by default) before the TCP connection goes,
+  so that the server reads all that was sent.
 - Plain TCP only: no TLS (`wss://`).
 
 Tested with GHC 9.12.4, effectful 2.7.1, websockets 0.13.

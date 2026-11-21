@@ -7,6 +7,7 @@ import Control.Concurrent.STM (atomically, newTQueueIO, readTQueue, writeTQueue)
 import Control.Exception (bracket)
 import Control.Monad (forM_, forever, replicateM)
 import Data.ByteString qualified as ByteString
+import Data.IORef (atomicModifyIORef', modifyIORef', newIORef, readIORef)
 import Data.List (sort)
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -72,6 +73,21 @@ tests =
               _ <- sendText "x" >> receiveMessage
               Local.modify @Int (+ 1)
           outcome @?= Right 2
+      , testCase "traced reports the traffic of an in-memory connection" $ do
+          (log', inbox) <- (,) <$> newIORef [] <*> newIORef [Just (TextMessage "one"), Nothing]
+          let receive = liftIO (atomicModifyIORef' inbox (\case (x : rest) -> (rest, x); [] -> ([], Nothing)))
+              observe traffic = liftIO (modifyIORef' log' (traffic :))
+          received <- runEff . runWebSocketWith (\_ -> pure True) receive . traced observe $
+            sendText "hello" >> (,) <$> receiveMessage <*> receiveMessage
+          received @?= (Just (TextMessage "one"), Nothing)
+          reverse <$> readIORef log' >>= (@?= [Sent (TextMessage "hello") True, Received (Just (TextMessage "one")), Received Nothing])
+      , testCase "traced reports the traffic of a real connection" $ do
+          log' <- newIORef []
+          outcome <- withServer echo $ \config ->
+            client config . traced (\traffic -> liftIO (modifyIORef' log' (traffic :))) $
+              sendBinary (ByteString.pack [1, 2]) >> receiveMessage
+          outcome @?= Right (Just (BinaryMessage (ByteString.pack [1, 2])))
+          reverse <$> readIORef log' >>= (@?= [Sent (BinaryMessage (ByteString.pack [1, 2])) True, Received (Just (BinaryMessage (ByteString.pack [1, 2])))])
       , testCase "sends from several threads without mixing messages" $ do
           let payloads = [ByteString.replicate 50_000 (fromIntegral n) | n <- [1 .. 20 :: Int]]
           received <- newTQueueIO

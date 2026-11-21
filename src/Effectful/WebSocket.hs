@@ -22,12 +22,16 @@ module Effectful.WebSocket
 
     -- * Interpreters
   , runWebSocketWith
+
+    -- * Observing the traffic
+  , Traffic (..)
+  , traced
   ) where
 
 import Data.ByteString (ByteString)
 import Data.Text (Text)
 import Effectful
-import Effectful.Dispatch.Dynamic (interpret_, send)
+import Effectful.Dispatch.Dynamic (interpose_, interpret_, send)
 import Streamly.Data.Stream (Stream)
 import Streamly.Data.Stream qualified as Stream
 
@@ -75,3 +79,25 @@ runWebSocketWith
 runWebSocketWith sendAction receiveAction = interpret_ $ \case
   SendMessage message -> sendAction message
   ReceiveMessage -> receiveAction
+
+-- | A message that went through the connection.
+data Traffic
+  = -- | A message sent, and whether it went out.
+    Sent Message Bool
+  | -- | A message received; 'Nothing' when the connection closed.
+    Received (Maybe Message)
+  deriving stock (Eq, Show)
+
+-- | Report every message of an action to an observer, whatever interprets
+-- the effect, and leave the messages as they are. The observer runs in the
+-- thread that sends or receives.
+traced :: WebSocket :> es => (Traffic -> Eff es ()) -> Eff es a -> Eff es a
+traced observe = interpose_ $ \case
+  SendMessage message -> do
+    sent <- sendMessage message
+    observe (Sent message sent)
+    pure sent
+  ReceiveMessage -> do
+    received <- receiveMessage
+    observe (Received received)
+    pure received
