@@ -48,8 +48,8 @@ streamly-websockets and streamly-http are not on Hackage yet:
 from GitHub, at their releases. To build against copies checked out next to
 this repository instead, pass `--project-file=cabal.project.siblings`.
 
-Tested with GHC 9.12.4 and effectful 2.7.1, against servers of the
-websockets package 0.13.
+Tested with GHC 9.12.4 and effectful 2.7.1, against the server of
+streamly-websockets.
 
 ## License
 

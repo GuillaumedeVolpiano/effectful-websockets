@@ -1,4 +1,5 @@
--- | The client against a websockets server on the loopback interface.
+-- | The client against a server of streamly-websockets on the loopback
+-- interface.
 module Main (main) where
 
 import Control.Concurrent (threadDelay)
@@ -9,8 +10,6 @@ import Control.Monad (forM_, forever, replicateM)
 import Data.ByteString qualified as ByteString
 import Data.IORef (atomicModifyIORef', modifyIORef', newIORef, readIORef)
 import Data.List (sort)
-import Data.Text (Text)
-import Data.Text qualified as Text
 import Effectful
 import Effectful.Concurrent (Concurrent, runConcurrent)
 import Effectful.Concurrent.Async (forConcurrently_)
@@ -19,9 +18,9 @@ import Effectful.State.Static.Local qualified as Local
 import Effectful.WebSocket
 import Effectful.WebSocket.Client
 import Network.Socket qualified as Socket
-import Network.WebSockets qualified as WS
 import Streamly.Data.Fold qualified as Fold
 import Streamly.Data.Stream qualified as Stream
+import Streamly.External.Network.WebSocket.Server qualified as Server
 import Test.Tasty (TestTree, defaultMain, localOption, mkTimeout, testGroup)
 import Test.Tasty.HUnit (testCase, (@?=))
 
@@ -44,11 +43,11 @@ tests =
           outcome <- withServer echo $ \config -> client config (sendBinary large >> receiveMessage)
           outcome @?= Right (Just (BinaryMessage large))
       , testCase "streams messages until the server closes" $ do
-          let server connection = forM_ ["a", "b", "c"] (WS.sendTextData connection . Text.pack) >> WS.sendClose connection ("" :: Text) >> drain connection
+          let server connection = forM_ ["a", "b", "c"] (Server.send connection . Server.TextMessage) >> Server.close connection >> drain connection
           outcome <- withServer server $ \config -> client config (Stream.fold Fold.toList messages)
           outcome @?= Right [TextMessage "a", TextMessage "b", TextMessage "c"]
       , testCase "sending after the server closed fails" $ do
-          let server connection = WS.sendClose connection ("" :: Text) >> drain connection
+          let server connection = Server.close connection >> drain connection
           outcome <- withServer server $ \config -> client config $ do
             _ <- receiveMessage
             liftIO (threadDelay 100_000)
@@ -91,7 +90,10 @@ tests =
       , testCase "sends from several threads without mixing messages" $ do
           let payloads = [ByteString.replicate 50_000 (fromIntegral n) | n <- [1 .. 20 :: Int]]
           received <- newTQueueIO
-          let server connection = forever (WS.receiveData connection >>= atomically . writeTQueue received)
+          let keep = \case
+                Server.BinaryMessage bytes -> atomically (writeTQueue received bytes)
+                Server.TextMessage _ -> pure ()
+              server connection = Stream.fold (Fold.drainMapM keep) (Server.messages connection)
           outcome <- withServer server $ \config ->
             client config (forConcurrently_ payloads sendBinary)
           outcome @?= Right ()
@@ -100,12 +102,12 @@ tests =
       ]
 
 -- | Echo every message.
-echo :: WS.Connection -> IO ()
-echo connection = forever (WS.receiveDataMessage connection >>= WS.sendDataMessage connection)
+echo :: Server.Connection -> IO ()
+echo connection = Stream.fold (Fold.drainMapM (Server.send connection)) (Server.messages connection)
 
 -- | Read until the client closes.
-drain :: WS.Connection -> IO ()
-drain connection = forever (WS.receiveDataMessage connection)
+drain :: Server.Connection -> IO ()
+drain connection = Stream.fold Fold.drain (Server.messages connection)
 
 client
   :: ClientConfig
@@ -114,20 +116,16 @@ client
 client config = runEff . runConcurrent . runErrorNoCallStack . runWebSocketClient config
 
 -- | Serve each connection with a handler, on a free loopback port, while
--- the client runs. Retries the client while the server is not listening.
+-- the client runs.
 withServer
-  :: (WS.Connection -> IO ())
+  :: (Server.Connection -> IO ())
   -> (ClientConfig -> IO (Either WebSocketError a))
   -> IO (Either WebSocketError a)
-withServer handler run = do
-  port <- freePort
-  let app pending = WS.acceptRequest pending >>= handler
-  withAsync (WS.runServer "127.0.0.1" port app) $ \_ -> attempt (50 :: Int) (clientConfig "127.0.0.1" port "/")
-  where
-    attempt tries config =
-      run config >>= \case
-        Left (ConnectFailed _) | tries > 0 -> threadDelay 20_000 >> attempt (tries - 1) config
-        outcome -> pure outcome
+withServer handler run =
+  bracket (Server.listen "127.0.0.1" 0) Socket.close $ \listener -> do
+    port <- Socket.socketPort listener
+    withAsync (Server.serveSocket listener Server.defaultServerOptions (const handler)) $ \_ ->
+      run (clientConfig "127.0.0.1" (fromIntegral port) "/")
 
 -- | A port that was free a moment ago.
 freePort :: IO Int

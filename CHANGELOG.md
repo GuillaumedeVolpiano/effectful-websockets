@@ -4,6 +4,8 @@
 
 * Built on streamly-websockets 0.2: a connection that does not open
   within thirty seconds fails with `ConnectFailed`.
+* The tests run against the server of streamly-websockets; the websockets
+  package is no longer needed.
 
 ## 0.1.0.0 -- 2026-11-21
 

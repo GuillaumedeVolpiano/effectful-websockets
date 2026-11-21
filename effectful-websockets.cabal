@@ -70,7 +70,7 @@ test-suite effectful-websockets-test
     , network              ^>=3.2
     , stm                  ^>=2.5
     , streamly-core        ^>=0.3.3
+    , streamly-websockets  ^>=0.2
     , tasty                ^>=1.5
     , tasty-hunit          ^>=0.10
     , text                 ^>=2.1
-    , websockets           ^>=0.13
