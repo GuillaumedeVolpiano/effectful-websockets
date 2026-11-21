@@ -7,3 +7,4 @@ optional-packages:
   ../streamly-http
   ../streamly-websockets
   ../streamly-network-tcp
+  ../streamly-flatparse
