@@ -1,5 +1,10 @@
 # Revision history for effectful-websockets
 
+## 0.1.0.1 -- unreleased
+
+* Built on streamly-websockets 0.2: a connection that does not open
+  within thirty seconds fails with `ConnectFailed`.
+
 ## 0.1.0.0 -- 2026-11-21
 
 * `Effectful.WebSocket`: the `WebSocket` effect, with text and binary
