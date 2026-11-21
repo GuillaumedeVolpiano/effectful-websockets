@@ -44,8 +44,9 @@ A server that breaks the protocol, or sends a message larger than
 `maxMessageSize`, ends the connection like a server that closes it.
 
 streamly-websockets and streamly-http are not on Hackage yet:
-`cabal.project` picks them up when they are checked out next to this
-repository.
+`cabal.project` fetches them
+from GitHub, at their releases. To build against copies checked out next to
+this repository instead, pass `--project-file=cabal.project.siblings`.
 
 Tested with GHC 9.12.4 and effectful 2.7.1, against servers of the
 websockets package 0.13.

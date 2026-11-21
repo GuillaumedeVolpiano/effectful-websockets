@@ -1,6 +1,6 @@
 # Revision history for effectful-websockets
 
-## 0.1.0.0 -- unreleased
+## 0.1.0.0 -- 2026-11-21
 
 * `Effectful.WebSocket`: the `WebSocket` effect, with text and binary
   messages, a stream of received messages, and an interpreter from two
