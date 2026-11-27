@@ -69,16 +69,15 @@ test-suite effectful-websockets-test
   main-is:        Main.hs
   ghc-options:    -threaded
   build-depends:
-    , async                ^>=2.2
-    , base                 >=4.19 && <4.22
-    , bytestring           ^>=0.12
+    , async
+    , base
+    , bytestring
     , effectful            ^>=2.7
-    , effectful-core       ^>=2.7.1
+    , effectful-core
     , effectful-websockets
     , network              ^>=3.2
-    , stm                  ^>=2.5
-    , streamly-core        ^>=0.3.3
-    , streamly-websockets  ^>=0.3
+    , stm
+    , streamly-core
+    , streamly-websockets
     , tasty                ^>=1.5
     , tasty-hunit          ^>=0.10
-    , text                 ^>=2.1
