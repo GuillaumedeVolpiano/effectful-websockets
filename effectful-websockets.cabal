@@ -25,11 +25,19 @@ source-repository head
   location: https://github.com/GuillaumedeVolpiano/effectful-websockets.git
 
 common shared
-  default-language: GHC2024
+  default-language: GHC2021
   default-extensions:
+    DataKinds
+    DerivingStrategies
+    DisambiguateRecordFields
+    ExplicitNamespaces
+    GADTs
+    LambdaCase
+    MonoLocalBinds
     NoFieldSelectors
     OverloadedRecordDot
     OverloadedStrings
+    RoleAnnotations
     TypeFamilies
 
   ghc-options:
@@ -45,7 +53,7 @@ library
 
   build-depends:
     , async                ^>=2.2
-    , base                 ^>=4.21
+    , base                 >=4.19 && <4.22
     , bytestring           ^>=0.12
     , effectful-core       ^>=2.7.1
     , stm                  ^>=2.5
@@ -62,7 +70,7 @@ test-suite effectful-websockets-test
   ghc-options:    -threaded
   build-depends:
     , async                ^>=2.2
-    , base                 ^>=4.21
+    , base                 >=4.19 && <4.22
     , bytestring           ^>=0.12
     , effectful            ^>=2.7
     , effectful-core       ^>=2.7.1
