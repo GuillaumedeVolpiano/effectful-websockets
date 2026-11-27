@@ -87,6 +87,7 @@ data PingPong = PingPong
 defaultPingPong :: PingPong
 defaultPingPong = PingPong {interval = 10, timeout = 20}
 
+-- | Why a connection could not be used.
 data WebSocketError
   = -- | The connection could not be opened. Carries the cause.
     ConnectFailed Text

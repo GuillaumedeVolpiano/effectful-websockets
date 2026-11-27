@@ -53,9 +53,11 @@ type instance DispatchOf WebSocket = Dynamic
 sendMessage :: WebSocket :> es => Message -> Eff es Bool
 sendMessage = send . SendMessage
 
+-- | Send a text message, like 'sendMessage'.
 sendText :: WebSocket :> es => Text -> Eff es Bool
 sendText = sendMessage . TextMessage
 
+-- | Send a binary message, like 'sendMessage'.
 sendBinary :: WebSocket :> es => ByteString -> Eff es Bool
 sendBinary = sendMessage . BinaryMessage
 
