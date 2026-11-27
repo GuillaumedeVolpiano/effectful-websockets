@@ -1,5 +1,11 @@
 # Revision history for effectful-websockets
 
+## 0.1.1.3 -- 2026-11-27
+
+* No change of interface. The dependency bounds are stated once in the
+  cabal file, and the imports list the names they use.
+* The tests no longer depend on `text`, which they did not use.
+
 ## 0.1.1.2 -- 2026-11-27
 
 * Builds with GHC 9.8 and 9.10 as well as 9.12: the language is GHC2021
