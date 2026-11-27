@@ -118,7 +118,7 @@ runWebSocketClient
   -> Eff es a
 runWebSocketClient config = runWebSocketOver (WS.withConnection (connectionConfig config)) config.pingPong
 
--- | The configuration of @streamly-websockets@ that a 'ClientConfig'
+-- | The configuration of @streamly-websockets@ that a t'ClientConfig'
 -- stands for, without its pings.
 connectionConfig :: ClientConfig -> WS.Config
 connectionConfig config =
