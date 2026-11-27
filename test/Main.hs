@@ -7,20 +7,36 @@ import Control.Concurrent.Async (withAsync)
 import Control.Concurrent.STM (atomically, newTQueueIO, readTQueue, writeTQueue)
 import Control.Exception (bracket)
 import Control.Monad (forM_, forever, replicateM)
-import Data.ByteString qualified as ByteString
+import Data.ByteString (pack)
+import Data.ByteString qualified as BS (replicate)
 import Data.IORef (atomicModifyIORef', modifyIORef', newIORef, readIORef)
 import Data.List (sort)
-import Effectful
+import Effectful (Eff, IOE, MonadIO (liftIO), runEff)
 import Effectful.Concurrent (Concurrent, runConcurrent)
 import Effectful.Concurrent.Async (forConcurrently_)
 import Effectful.Error.Static (Error, runErrorNoCallStack)
-import Effectful.State.Static.Local qualified as Local
-import Effectful.WebSocket
-import Effectful.WebSocket.Client
-import Network.Socket qualified as Socket
-import Streamly.Data.Fold qualified as Fold
-import Streamly.Data.Stream qualified as Stream
-import Streamly.External.Network.WebSocket.Server qualified as Server
+import Effectful.State.Static.Local (execState, modify)
+import Effectful.WebSocket (Message (BinaryMessage, TextMessage),
+                            Traffic (Received, Sent), WebSocket, messages,
+                            receiveMessage, runWebSocketWith, sendBinary,
+                            sendText, traced)
+import Effectful.WebSocket.Client (ClientConfig (pingPong),
+                                   PingPong (PingPong, interval, timeout),
+                                   WebSocketError (..), clientConfig,
+                                   runWebSocketClient)
+import Network.Socket (Family (AF_INET), SockAddr (SockAddrInet),
+                       SocketType (Stream), bind, defaultProtocol, socketPort,
+                       tupleToHostAddress)
+import Network.Socket qualified as N (close, socket)
+import Streamly.Data.Fold (drainMapM, toList)
+import Streamly.Data.Fold qualified as F (drain)
+import Streamly.Data.Stream (fold)
+import Streamly.External.Network.WebSocket.Server (Connection,
+                                                   defaultServerOptions, listen,
+                                                   send, serveSocket)
+import Streamly.External.Network.WebSocket.Server qualified as WSS (Message (BinaryMessage, TextMessage),
+                                                                    close,
+                                                                    messages)
 import Test.Tasty (TestTree, defaultMain, localOption, mkTimeout, testGroup)
 import Test.Tasty.HUnit (testCase, (@?=))
 
@@ -35,19 +51,19 @@ tests =
       [ testCase "echoes text and binary messages" $ do
           outcome <- withServer echo $ \config -> client config $ do
             _ <- sendText "héllo"
-            _ <- sendBinary (ByteString.pack [0, 1, 255])
+            _ <- sendBinary (pack [0, 1, 255])
             replicateM 2 receiveMessage
-          outcome @?= Right [Just (TextMessage "héllo"), Just (BinaryMessage (ByteString.pack [0, 1, 255]))]
+          outcome @?= Right [Just (TextMessage "héllo"), Just (BinaryMessage (pack [0, 1, 255]))]
       , testCase "carries a message larger than one packet" $ do
-          let large = ByteString.replicate 300_000 42
+          let large = BS.replicate 300_000 42
           outcome <- withServer echo $ \config -> client config (sendBinary large >> receiveMessage)
           outcome @?= Right (Just (BinaryMessage large))
       , testCase "streams messages until the server closes" $ do
-          let server connection = forM_ ["a", "b", "c"] (Server.send connection . Server.TextMessage) >> Server.close connection >> drain connection
-          outcome <- withServer server $ \config -> client config (Stream.fold Fold.toList messages)
+          let server connection = forM_ ["a", "b", "c"] (send connection . WSS.TextMessage) >> WSS.close connection >> drain connection
+          outcome <- withServer server $ \config -> client config (fold toList messages)
           outcome @?= Right [TextMessage "a", TextMessage "b", TextMessage "c"]
       , testCase "sending after the server closed fails" $ do
-          let server connection = Server.close connection >> drain connection
+          let server connection = WSS.close connection >> drain connection
           outcome <- withServer server $ \config -> client config $ do
             _ <- receiveMessage
             liftIO (threadDelay 100_000)
@@ -67,10 +83,10 @@ tests =
           outcome @?= Left NoPong
       , testCase "keeps the local state of the action" $ do
           outcome <- withServer echo $ \config ->
-            client config . Local.execState (0 :: Int) $ do
-              Local.modify @Int (+ 1)
+            client config . execState (0 :: Int) $ do
+              modify @Int (+ 1)
               _ <- sendText "x" >> receiveMessage
-              Local.modify @Int (+ 1)
+              modify @Int (+ 1)
           outcome @?= Right 2
       , testCase "traced reports the traffic of an in-memory connection" $ do
           (log', inbox) <- (,) <$> newIORef [] <*> newIORef [Just (TextMessage "one"), Nothing]
@@ -84,16 +100,16 @@ tests =
           log' <- newIORef []
           outcome <- withServer echo $ \config ->
             client config . traced (\traffic -> liftIO (modifyIORef' log' (traffic :))) $
-              sendBinary (ByteString.pack [1, 2]) >> receiveMessage
-          outcome @?= Right (Just (BinaryMessage (ByteString.pack [1, 2])))
-          reverse <$> readIORef log' >>= (@?= [Sent (BinaryMessage (ByteString.pack [1, 2])) True, Received (Just (BinaryMessage (ByteString.pack [1, 2])))])
+              sendBinary (pack [1, 2]) >> receiveMessage
+          outcome @?= Right (Just (BinaryMessage (pack [1, 2])))
+          reverse <$> readIORef log' >>= (@?= [Sent (BinaryMessage (pack [1, 2])) True, Received (Just (BinaryMessage (pack [1, 2])))])
       , testCase "sends from several threads without mixing messages" $ do
-          let payloads = [ByteString.replicate 50_000 (fromIntegral n) | n <- [1 .. 20 :: Int]]
+          let payloads = [BS.replicate 50_000 (fromIntegral n) | n <- [1 .. 20 :: Int]]
           received <- newTQueueIO
           let keep = \case
-                Server.BinaryMessage bytes -> atomically (writeTQueue received bytes)
-                Server.TextMessage _ -> pure ()
-              server connection = Stream.fold (Fold.drainMapM keep) (Server.messages connection)
+                WSS.BinaryMessage bytes -> atomically (writeTQueue received bytes)
+                WSS.TextMessage _ -> pure ()
+              server connection = fold (drainMapM keep) (WSS.messages connection)
           outcome <- withServer server $ \config ->
             client config (forConcurrently_ payloads sendBinary)
           outcome @?= Right ()
@@ -102,12 +118,12 @@ tests =
       ]
 
 -- | Echo every message.
-echo :: Server.Connection -> IO ()
-echo connection = Stream.fold (Fold.drainMapM (Server.send connection)) (Server.messages connection)
+echo :: Connection -> IO ()
+echo connection = fold (drainMapM (send connection)) (WSS.messages connection)
 
 -- | Read until the client closes.
-drain :: Server.Connection -> IO ()
-drain connection = Stream.fold Fold.drain (Server.messages connection)
+drain :: Connection -> IO ()
+drain connection = fold F.drain (WSS.messages connection)
 
 client
   :: ClientConfig
@@ -118,18 +134,18 @@ client config = runEff . runConcurrent . runErrorNoCallStack . runWebSocketClien
 -- | Serve each connection with a handler, on a free loopback port, while
 -- the client runs.
 withServer
-  :: (Server.Connection -> IO ())
+  :: (Connection -> IO ())
   -> (ClientConfig -> IO (Either WebSocketError a))
   -> IO (Either WebSocketError a)
 withServer handler run =
-  bracket (Server.listen "127.0.0.1" 0) Socket.close $ \listener -> do
-    port <- Socket.socketPort listener
-    withAsync (Server.serveSocket listener Server.defaultServerOptions (const handler)) $ \_ ->
+  bracket (listen "127.0.0.1" 0) N.close $ \listener -> do
+    port <- socketPort listener
+    withAsync (serveSocket listener defaultServerOptions (const handler)) $ \_ ->
       run (clientConfig "127.0.0.1" (fromIntegral port) "/")
 
 -- | A port that was free a moment ago.
 freePort :: IO Int
 freePort =
-  bracket (Socket.socket Socket.AF_INET Socket.Stream Socket.defaultProtocol) Socket.close $ \socket -> do
-    Socket.bind socket (Socket.SockAddrInet 0 (Socket.tupleToHostAddress (127, 0, 0, 1)))
-    fromIntegral <$> Socket.socketPort socket
+  bracket (N.socket AF_INET Stream defaultProtocol) N.close $ \socket -> do
+    bind socket (SockAddrInet 0 (tupleToHostAddress (127, 0, 0, 1)))
+    fromIntegral <$> socketPort socket

@@ -30,10 +30,9 @@ module Effectful.WebSocket
 
 import Data.ByteString (ByteString)
 import Data.Text (Text)
-import Effectful
+import Effectful (Dispatch (Dynamic), DispatchOf, Eff, Effect, type (:>))
 import Effectful.Dispatch.Dynamic (interpose_, interpret_, send)
-import Streamly.Data.Stream (Stream)
-import Streamly.Data.Stream qualified as Stream
+import Streamly.Data.Stream (Stream, unfoldrM)
 
 -- | A whole WebSocket message.
 data Message
@@ -67,7 +66,7 @@ receiveMessage = send ReceiveMessage
 
 -- | The messages received until the connection closes.
 messages :: WebSocket :> es => Stream (Eff es) Message
-messages = Stream.unfoldrM (const (fmap (,()) <$> receiveMessage)) ()
+messages = unfoldrM (const (fmap (,()) <$> receiveMessage)) ()
 
 -- | Interpret the effect with two actions: for tests, or for another
 -- transport.

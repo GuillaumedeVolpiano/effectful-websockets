@@ -29,18 +29,25 @@ module Effectful.WebSocket.Client
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (ExceptionInLinkedThread (..), link, withAsync)
 import Control.Concurrent.STM (atomically, check, readTVar, registerDelay)
-import Control.Exception (Exception, IOException, SomeException, catch, displayException, fromException, throwIO, try)
+import Control.Exception (Exception, IOException, SomeException, catch,
+                          displayException, fromException, throwIO, try)
 import Control.Monad (forever, unless)
 import Data.ByteString (ByteString)
-import Data.ByteString.Char8 qualified as Char8
+import Data.ByteString.Char8 qualified as BS8 (pack)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Text (Text)
-import Data.Text qualified as Text
-import Effectful
+import Data.Text qualified as T (pack)
+import Effectful (Eff, IOE, MonadIO (liftIO), UnliftStrategy (SeqUnlift),
+                  withEffToIO, type (:>))
 import Effectful.Error.Static (Error, throwError)
 import Effectful.WebSocket (Message (..), WebSocket, runWebSocketWith)
 import Streamly.External.Network.HTTP (HttpError)
-import Streamly.External.Network.WebSocket qualified as WS
+import Streamly.External.Network.WebSocket (Connection, ping, pongCount,
+                                            receive, send, withConnection)
+import Streamly.External.Network.WebSocket qualified as WS (Config (closeTimeout, headers, maxMessageSize),
+                                                            Message (BinaryMessage, TextMessage),
+                                                            WebSocketError,
+                                                            config)
 
 -- | Where to connect, and how.
 data ClientConfig = ClientConfig
@@ -116,13 +123,13 @@ runWebSocketClient
   => ClientConfig
   -> Eff (WebSocket : es) a
   -> Eff es a
-runWebSocketClient config = runWebSocketOver (WS.withConnection (connectionConfig config)) config.pingPong
+runWebSocketClient config = runWebSocketOver (withConnection (connectionConfig config)) config.pingPong
 
 -- | The configuration of @streamly-websockets@ that a t'ClientConfig'
 -- stands for, without its pings.
 connectionConfig :: ClientConfig -> WS.Config
 connectionConfig config =
-  (WS.config config.host config.port (Char8.pack config.path))
+  (WS.config config.host config.port (BS8.pack config.path))
     { WS.headers = config.headers
     , WS.maxMessageSize = config.maxMessageSize
     , WS.closeTimeout = config.closeTimeout
@@ -138,7 +145,7 @@ connectionConfig config =
 -- @streamly-websockets@ or one of @streamly-http@; anything else passes.
 runWebSocketOver
   :: (IOE :> es, Error WebSocketError :> es)
-  => (forall x. (WS.Connection -> IO x) -> IO x)
+  => (forall x. (Connection -> IO x) -> IO x)
   -> Maybe PingPong
   -> Eff (WebSocket : es) a
   -> Eff es a
@@ -156,7 +163,7 @@ runWebSocketOver open pings action = do
     case attempt of
       Right value -> pure (Right value)
       Left (err :: SomeException)
-        | not wasConnected, openingFailure err -> pure (Left (ConnectFailed (Text.pack (displayException err))))
+        | not wasConnected, openingFailure err -> pure (Left (ConnectFailed (T.pack (displayException err))))
         | Just (ExceptionInLinkedThread _ cause) <- fromException err
         , Just PongTimeout <- fromException cause ->
             pure (Left NoPong)
@@ -175,28 +182,28 @@ runWebSocketOver open pings action = do
 -- | Ping at each interval, and fail when the pong does not come in time.
 -- Stops quietly once nothing can be sent: the connection is then closed,
 -- which the action sees for itself.
-watch :: PingPong -> WS.Connection -> IO ()
+watch :: PingPong -> Connection -> IO ()
 watch pingPong connection = loop `catch` (\(_ :: WS.WebSocketError) -> pure ()) `catch` (\(_ :: IOException) -> pure ())
   where
     loop = forever $ do
       threadDelay (pingPong.interval * 1_000_000)
-      before <- atomically (WS.pongCount connection)
-      WS.ping connection ""
+      before <- atomically (pongCount connection)
+      ping connection ""
       expired <- registerDelay (pingPong.timeout * 1_000_000)
       answered <- atomically $ do
-        count <- WS.pongCount connection
+        count <- pongCount connection
         late <- readTVar expired
         check (count > before || late)
         pure (count > before)
       unless answered (throwIO PongTimeout)
 
 -- | Once the connection is known to be closed, nothing is sent.
-sendTo :: IORef Bool -> WS.Connection -> Message -> IO Bool
+sendTo :: IORef Bool -> Connection -> Message -> IO Bool
 sendTo closed connection message =
   readIORef closed >>= \case
     True -> pure False
     False ->
-      ( True <$ WS.send connection (case message of
+      ( True <$ send connection (case message of
           TextMessage text -> WS.TextMessage text
           BinaryMessage bytes -> WS.BinaryMessage bytes)
       )
@@ -205,9 +212,9 @@ sendTo closed connection message =
   where
     lost = False <$ writeIORef closed True
 
-receiveFrom :: IORef Bool -> WS.Connection -> IO (Maybe Message)
+receiveFrom :: IORef Bool -> Connection -> IO (Maybe Message)
 receiveFrom closed connection =
-  (WS.receive connection >>= maybe lost (pure . Just . fromMessage))
+  (receive connection >>= maybe lost (pure . Just . fromMessage))
     `catch` (\(_ :: WS.WebSocketError) -> lost)
     `catch` (\(_ :: IOException) -> lost)
   where
