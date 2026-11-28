@@ -1,6 +1,6 @@
 cabal-version:   3.12
 name:            effectful-websockets
-version:         0.1.1.3
+version:         0.1.0.0
 synopsis:        WebSocket connections as an Effectful effect
 description:
   A WebSocket effect for Effectful: send and receive whole text or binary
@@ -11,8 +11,8 @@ description:
 homepage:        https://github.com/GuillaumedeVolpiano/effectful-websockets
 license:         BSD-3-Clause
 license-file:    LICENSE
-author:          GuillaumedeVolpiano
-maintainer:      xavier@wheredoibegin.fr
+author:          Xavier Dectot
+maintainer:      Xavier Dectot <xavier@wheredoibegin.fr>
 category:        Network, Web, Control
 build-type:      Simple
 tested-with:     GHC ==9.8.4 || ==9.10.3 || ==9.12.4
@@ -58,8 +58,8 @@ library
     , effectful-core       ^>=2.7.1
     , stm                  ^>=2.5
     , streamly-core        ^>=0.3.3
-    , streamly-http        ^>=0.3
-    , streamly-websockets  ^>=0.3
+    , streamly-http        ^>=0.1
+    , streamly-websockets  ^>=0.1
     , text                 ^>=2.1
 
 test-suite effectful-websockets-test
