@@ -11,12 +11,17 @@ effect.
   interpreter.
 - `Effectful.WebSocket.Client`: `runWebSocketClient` opens a connection
   with the
-  [streamly-websockets](https://github.com/GuillaumedeVolpiano/streamly-websockets)
+  [streamly-websockets](https://hackage.haskell.org/package/streamly-websockets)
   package and runs an action over it.
 
 ```haskell
-import Effectful.WebSocket
-import Effectful.WebSocket.Client
+{-# LANGUAGE OverloadedStrings #-}
+
+import Effectful (Eff, IOE, (:>))
+import Effectful.Error.Static (Error)
+import Effectful.WebSocket (Message, receiveMessage, sendText)
+import Effectful.WebSocket.Client (WebSocketError, clientConfig,
+                                   runWebSocketClient)
 
 hello :: (IOE :> es, Error WebSocketError :> es) => Eff es (Maybe Message)
 hello = runWebSocketClient (clientConfig "127.0.0.1" 8080 "/") $ do
@@ -45,13 +50,14 @@ hello = runWebSocketClient (clientConfig "127.0.0.1" 8080 "/") $ do
 A server that breaks the protocol, or sends a message larger than
 `maxMessageSize`, ends the connection like a server that closes it.
 
-streamly-websockets and streamly-http are not on Hackage yet:
-`cabal.project` fetches them
-from GitHub, at their releases. To build against copies checked out next to
-this repository instead, pass `--project-file=cabal.project.siblings`.
+To build against copies of
+[streamly-websockets](https://hackage.haskell.org/package/streamly-websockets)
+and [streamly-http](https://hackage.haskell.org/package/streamly-http)
+checked out next to this repository, pass
+`--project-file=cabal.project.siblings`.
 
-Tested with GHC 9.12.4 and effectful 2.7.1, against the server of
-streamly-websockets.
+Tested with GHC 9.8.4, 9.10.3 and 9.12.4, and effectful 2.7.1, against the
+server of streamly-websockets.
 
 ## License
 
